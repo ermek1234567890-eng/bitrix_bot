@@ -1,0 +1,154 @@
+{
+  "TYPE_ID": {
+    "label": "Тип",
+    "type": "crm_status"
+  },
+  "SOURCE_ID": {
+    "label": "Источник",
+    "type": "crm_status"
+  },
+  "SOURCE_DESCRIPTION": {
+    "label": "Дополнительно об источнике",
+    "type": "string"
+  },
+  "ORIGINATOR_ID": {
+    "label": "Внешний источник",
+    "type": "string"
+  },
+  "ORIGIN_ID": {
+    "label": "Идентификатор элемента во внешнем источнике",
+    "type": "string"
+  },
+  "UTM_MEDIUM": {
+    "label": "Тип трафика",
+    "type": "string"
+  },
+  "UF_CRM_1618904345499": {
+    "label": "Тип заявки",
+    "type": "enumeration"
+  },
+  "UF_CRM_1618904777720": {
+    "label": "Место встречи",
+    "type": "enumeration"
+  },
+  "UF_CRM_1618904798223": {
+    "label": "Адрес встречи",
+    "type": "string"
+  },
+  "UF_CRM_1618904807447": {
+    "label": "Статус встречи",
+    "type": "enumeration"
+  },
+  "UF_CRM_1618905040703": {
+    "label": "Дата встречи с клиентом для подписания договора (?)",
+    "type": "datetime"
+  },
+  "UF_CRM_1618905073103": {
+    "label": "Тип оплаты",
+    "type": "enumeration"
+  },
+  "UF_CRM_SPACE_TYPE": {
+    "label": "Тип помещения",
+    "type": "string"
+  },
+  "UF_CRM_1651238129964": {
+    "label": "Назначил встречу",
+    "type": "enumeration"
+  },
+  "UF_CRM_1672032042465": {
+    "label": "Тип организации",
+    "type": "enumeration"
+  },
+  "UF_CRM_1672032087916": {
+    "label": "Тип организации сокращенно (для реквизитов сторон)",
+    "type": "enumeration"
+  },
+  "UF_CRM_1739540689258": {
+    "label": "Тех. поле (Назначил встречу)",
+    "type": "string"
+  },
+  "UF_CRM_1759385615587": {
+    "label": "Рассматривает проект - ТМ",
+    "type": "enumeration"
+  },
+  "UF_CRM_69EB81120323D": {
+    "label": "utm_source (marquiz)",
+    "type": "string"
+  },
+  "UF_CRM_84E09": {
+    "label": "Тип помещения (pb)",
+    "type": "string"
+  },
+  "UF_CRM_1618904472363": {
+    "label": "Тип помещения - ТМ",
+    "type": "enumeration"
+  },
+  "UF_CRM_1618904742504": {
+    "label": "Дата и время встречи - ТМ",
+    "type": "datetime"
+  },
+  "UF_CRM_1751563746714": {
+    "label": "Источника трафика",
+    "type": "enumeration"
+  },
+  "UF_CRM_1751630224": {
+    "label": "Аналитика встречи - фиксация",
+    "type": "enumeration"
+  },
+  "UF_CRM_1751708114": {
+    "label": "Дата (Не дошел до встречу) - ТМ",
+    "type": "date"
+  },
+  "UF_CRM_1751708195": {
+    "label": "Дата (Записан на встречу в ОП) - ТМ",
+    "type": "date"
+  },
+  "UF_CRM_1752403539": {
+    "label": "Дата встреча проведена - фиксация",
+    "type": "date"
+  },
+  "UF_CRM_1753368850994": {
+    "label": "Дата назначения повторной встречи - ОП",
+    "type": "datetime"
+  },
+  "UF_CRM_1754145438": {
+    "label": "Дата (Проведена повторная встреча) - ОП",
+    "type": "date"
+  },
+  "UF_CRM_1756870365": {
+    "label": "Дата проведенной повторной встречи - фиксация",
+    "type": "date"
+  },
+  "UF_CRM_1758630528": {
+    "label": "Проект - встреча",
+    "type": "enumeration"
+  },
+  "UF_CRM_1734088553": {
+    "label": "Актуальная дата встречи",
+    "type": "datetime"
+  },
+  "UF_CRM_1764937583": {
+    "label": "Записан на встречу в ОП - Ф/Я",
+    "type": "datetime"
+  },
+  "UF_CRM_1764937740": {
+    "label": "Не дошел до встречи - Ф/Я",
+    "type": "datetime"
+  },
+  "UF_CRM_1764937872": {
+    "label": "Встреча Без ТМ - Ф/Я",
+    "type": "datetime"
+  },
+  "UF_CRM_1745408474": {
+    "label": "Сообщение встреча проведена",
+    "type": "enumeration"
+  },
+  "UF_CRM_1733324768": {
+    "label": "Какой тип недвижимости вы ищете?",
+    "type": "string"
+  },
+  "UF_CRM_1756533164863": {
+    "label": "Тип помещения (бронь)",
+    "type": "enumeration"
+  }
+}

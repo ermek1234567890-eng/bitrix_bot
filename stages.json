@@ -1,0 +1,194 @@
+[
+  {
+    "ID": "164",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:NEW",
+    "NAME": "Встреча от ТМ",
+    "NAME_INIT": "Новая",
+    "SORT": "10",
+    "SYSTEM": "Y",
+    "CATEGORY_ID": "2",
+    "COLOR": "#39a8ef",
+    "SEMANTICS": null,
+    "EXTRA": {
+      "SEMANTICS": "process",
+      "COLOR": "#39a8ef"
+    }
+  },
+  {
+    "ID": "894",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:UC_8UPW0W",
+    "NAME": "Встреча от Агентов",
+    "NAME_INIT": "",
+    "SORT": "20",
+    "SYSTEM": "N",
+    "CATEGORY_ID": "2",
+    "COLOR": "#ffab00",
+    "SEMANTICS": null,
+    "EXTRA": {
+      "SEMANTICS": "process",
+      "COLOR": "#ffab00"
+    }
+  },
+  {
+    "ID": "166",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:PREPARATION",
+    "NAME": "Пешеходы",
+    "NAME_INIT": "",
+    "SORT": "30",
+    "SYSTEM": "N",
+    "CATEGORY_ID": "2",
+    "COLOR": "#2fc6f6",
+    "SEMANTICS": null,
+    "EXTRA": {
+      "SEMANTICS": "process",
+      "COLOR": "#2fc6f6"
+    }
+  },
+  {
+    "ID": "168",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:PREPAYMENT_INVOICE",
+    "NAME": "ВСТРЕЧА ПРОВЕДЕНА",
+    "NAME_INIT": "",
+    "SORT": "40",
+    "SYSTEM": "N",
+    "CATEGORY_ID": "2",
+    "COLOR": "#55d0e0",
+    "SEMANTICS": null,
+    "EXTRA": {
+      "SEMANTICS": "process",
+      "COLOR": "#55d0e0"
+    }
+  },
+  {
+    "ID": "834",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:UC_94GV55",
+    "NAME": "Дожим",
+    "NAME_INIT": "",
+    "SORT": "50",
+    "SYSTEM": "N",
+    "CATEGORY_ID": "2",
+    "COLOR": "#47d1e2",
+    "SEMANTICS": null,
+    "EXTRA": {
+      "SEMANTICS": "process",
+      "COLOR": "#47d1e2"
+    }
+  },
+  {
+    "ID": "170",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:EXECUTING",
+    "NAME": "Назначена ПОВТОРНАЯ ВСТРЕЧА",
+    "NAME_INIT": "",
+    "SORT": "60",
+    "SYSTEM": "N",
+    "CATEGORY_ID": "2",
+    "COLOR": "#47e4c2",
+    "SEMANTICS": null,
+    "EXTRA": {
+      "SEMANTICS": "process",
+      "COLOR": "#47e4c2"
+    }
+  },
+  {
+    "ID": "172",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:FINAL_INVOICE",
+    "NAME": "Проведена ПОВТОРНАЯ ВСТРЕЧА",
+    "NAME_INIT": "",
+    "SORT": "70",
+    "SYSTEM": "N",
+    "CATEGORY_ID": "2",
+    "COLOR": "#ffa900",
+    "SEMANTICS": null,
+    "EXTRA": {
+      "SEMANTICS": "process",
+      "COLOR": "#ffa900"
+    }
+  },
+  {
+    "ID": "880",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:UC_DGBBV2",
+    "NAME": "Клиентская база",
+    "NAME_INIT": "",
+    "SORT": "80",
+    "SYSTEM": "N",
+    "CATEGORY_ID": "2",
+    "COLOR": "#0000ff",
+    "SEMANTICS": null,
+    "EXTRA": {
+      "SEMANTICS": "process",
+      "COLOR": "#0000ff"
+    }
+  },
+  {
+    "ID": "866",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:UC_RPDNKW",
+    "NAME": "Фиксация брони",
+    "NAME_INIT": "",
+    "SORT": "90",
+    "SYSTEM": "N",
+    "CATEGORY_ID": "2",
+    "COLOR": "#75d900",
+    "SEMANTICS": null,
+    "EXTRA": {
+      "SEMANTICS": "process",
+      "COLOR": "#75d900"
+    }
+  },
+  {
+    "ID": "174",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:WON",
+    "NAME": "БРОНЬ ПОДПИСАН",
+    "NAME_INIT": "Сделка успешна",
+    "SORT": "100",
+    "SYSTEM": "Y",
+    "CATEGORY_ID": "2",
+    "COLOR": "#7bd500",
+    "SEMANTICS": "S",
+    "EXTRA": {
+      "SEMANTICS": "success",
+      "COLOR": "#7bd500"
+    }
+  },
+  {
+    "ID": "176",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:LOSE",
+    "NAME": "Отказ после встречи",
+    "NAME_INIT": "Сделка провалена",
+    "SORT": "110",
+    "SYSTEM": "Y",
+    "CATEGORY_ID": "2",
+    "COLOR": "#ff5752",
+    "SEMANTICS": "F",
+    "EXTRA": {
+      "SEMANTICS": "failure",
+      "COLOR": "#ff5752"
+    }
+  },
+  {
+    "ID": "928",
+    "ENTITY_ID": "DEAL_STAGE_2",
+    "STATUS_ID": "C2:UC_ZPEQN9",
+    "NAME": "Продажа паркинг, кладовка",
+    "NAME_INIT": "",
+    "SORT": "120",
+    "SYSTEM": "N",
+    "CATEGORY_ID": "2",
+    "COLOR": "#468ee5",
+    "SEMANTICS": "F",
+    "EXTRA": {
+      "SEMANTICS": "apology",
+      "COLOR": "#468ee5"
+    }
+  }
+]

@@ -1,0 +1,133 @@
+{
+  "settings": {
+    "meeting_date_field": "UF_CRM_1752403539",
+    "booking_date_field": "UF_CRM_1754145255",
+    "paid_date_field": "UF_CRM_1754145323",
+    "sales_pipeline_id": "2",
+    "cs_pipeline_id": "6",
+    "agent_stage_ids": "C2:UC_8UPW0W",
+    "ped_stage_ids": "C2:PREPARATION",
+    "closed_stage_ids": "C2:LOSE,C2:UC_ZPEQN9",
+    "source_field": "UF_CRM_1751630224",
+    "project_field": "UF_CRM_1758630528",
+    "source_tm_ids": "1514,1660",
+    "source_agent_ids": "2008",
+    "source_ped_ids": "1516",
+    "op_manager_field": "UF_CRM_1751600120"
+  },
+  "managers": [
+    {
+      "bitrix_id": 27396,
+      "name": "Мухамеджан Нургуль",
+      "short_name": "Нургуль"
+    },
+    {
+      "bitrix_id": 45844,
+      "name": "Ниязов Сабир",
+      "short_name": "Сабир"
+    },
+    {
+      "bitrix_id": 46284,
+      "name": "Мырзакулов Асхат",
+      "short_name": "Асхат"
+    },
+    {
+      "bitrix_id": 49464,
+      "name": "Абдрузак Заир",
+      "short_name": "Заир"
+    },
+    {
+      "bitrix_id": 62528,
+      "name": "Худайкулова Гюзаль",
+      "short_name": "Гюзаль"
+    },
+    {
+      "bitrix_id": 66566,
+      "name": "Ким Яна",
+      "short_name": "Яна"
+    },
+    {
+      "bitrix_id": 67332,
+      "name": "Музапбаров Олжас",
+      "short_name": "Олжас"
+    },
+    {
+      "bitrix_id": 67442,
+      "name": "Алиядинова Самал",
+      "short_name": "Самал"
+    },
+    {
+      "bitrix_id": 68542,
+      "name": "Қайса Ернур",
+      "short_name": "Ернур"
+    },
+    {
+      "bitrix_id": 68544,
+      "name": "Жумадилов Асет",
+      "short_name": "Асет"
+    },
+    {
+      "bitrix_id": 68766,
+      "name": "Саятов Ансар",
+      "short_name": "Ансар"
+    },
+    {
+      "bitrix_id": 68768,
+      "name": "Абенов Алишер",
+      "short_name": "Алишер"
+    },
+    {
+      "bitrix_id": 68800,
+      "name": "Бекназар Аль-Нур",
+      "short_name": "Аль-Нур"
+    },
+    {
+      "bitrix_id": 68840,
+      "name": "Отжағарова Жазира",
+      "short_name": "Жазира"
+    },
+    {
+      "bitrix_id": 68894,
+      "name": "Нурова Салима",
+      "short_name": "Салима"
+    }
+  ],
+  "projects": [
+    {
+      "name": "Атмосфера",
+      "enum_id": "1962"
+    },
+    {
+      "name": "Keruen",
+      "enum_id": "1964"
+    },
+    {
+      "name": "Aqsai Resort",
+      "enum_id": "1966"
+    },
+    {
+      "name": "Aura",
+      "enum_id": "1968"
+    },
+    {
+      "name": "Arlan",
+      "enum_id": "3676"
+    },
+    {
+      "name": "Bravo",
+      "enum_id": "3346"
+    },
+    {
+      "name": "Discovery",
+      "enum_id": "3348"
+    },
+    {
+      "name": "Atakent",
+      "enum_id": "3350"
+    },
+    {
+      "name": "Neo",
+      "enum_id": "3352"
+    }
+  ]
+}

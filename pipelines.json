@@ -1,0 +1,65 @@
+{
+  "categories": [
+    {
+      "id": 0,
+      "name": "Телемаркетинг",
+      "sort": 100,
+      "entityTypeId": 2,
+      "isDefault": "Y"
+    },
+    {
+      "id": 24,
+      "name": "Zvandau",
+      "sort": 200,
+      "entityTypeId": 2,
+      "isDefault": "N",
+      "originId": "",
+      "originatorId": ""
+    },
+    {
+      "id": 2,
+      "name": "Отдел продаж",
+      "sort": 300,
+      "entityTypeId": 2,
+      "isDefault": "N",
+      "originId": "",
+      "originatorId": ""
+    },
+    {
+      "id": 6,
+      "name": "Клиентский сервис",
+      "sort": 400,
+      "entityTypeId": 2,
+      "isDefault": "N",
+      "originId": "",
+      "originatorId": ""
+    },
+    {
+      "id": 22,
+      "name": "Воронка купивших",
+      "sort": 500,
+      "entityTypeId": 2,
+      "isDefault": "N",
+      "originId": "",
+      "originatorId": ""
+    },
+    {
+      "id": 18,
+      "name": "Воронка Агентская",
+      "sort": 600,
+      "entityTypeId": 2,
+      "isDefault": "N",
+      "originId": "",
+      "originatorId": ""
+    },
+    {
+      "id": 20,
+      "name": "Регистрация агентов",
+      "sort": 700,
+      "entityTypeId": 2,
+      "isDefault": "N",
+      "originId": "",
+      "originatorId": ""
+    }
+  ]
+}
