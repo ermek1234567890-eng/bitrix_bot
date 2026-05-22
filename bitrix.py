@@ -366,27 +366,30 @@ class Bitrix:
                 result.append(task)
         return result
 
+    async def _fetch_last_activity(self, deal_id: int, type_id: int) -> "dict | None":
+        """Return the single most-recent activity of a given type for a deal."""
+        data = await asyncio.wait_for(
+            self.call("crm.activity.list", {
+                "filter": {"OWNER_TYPE_ID": 2, "OWNER_ID": deal_id, "TYPE_ID": type_id},
+                "select": ["ID", "TYPE_ID", "START_TIME", "DESCRIPTION", "SUBJECT"],
+                "order": {"START_TIME": "DESC"},
+                "start": 0,
+            }),
+            timeout=API_TIMEOUT,
+        )
+        result = data.get("result", [])
+        if not result:
+            return None
+        # API returns results ordered DESC; first item is the most recent.
+        return result[0] if isinstance(result, list) else None
+
     async def fetch_last_call(self, deal_id: int) -> "dict | None":
         """Last phone call activity for a deal (TYPE_ID=2)."""
-        activities = await self.list_all("crm.activity.list", {
-            "filter": {"OWNER_TYPE_ID": 2, "OWNER_ID": deal_id, "TYPE_ID": 2},
-            "select": ["ID", "TYPE_ID", "START_TIME", "DESCRIPTION", "SUBJECT"],
-            "order": {"START_TIME": "DESC"},
-        })
-        if not activities:
-            return None
-        return max(activities, key=lambda a: a.get("START_TIME", ""))
+        return await self._fetch_last_activity(deal_id, type_id=2)
 
     async def fetch_last_visit(self, deal_id: int) -> "dict | None":
         """Last meeting/visit activity for a deal (TYPE_ID=1)."""
-        activities = await self.list_all("crm.activity.list", {
-            "filter": {"OWNER_TYPE_ID": 2, "OWNER_ID": deal_id, "TYPE_ID": 1},
-            "select": ["ID", "TYPE_ID", "START_TIME", "DESCRIPTION", "SUBJECT"],
-            "order": {"START_TIME": "DESC"},
-        })
-        if not activities:
-            return None
-        return max(activities, key=lambda a: a.get("START_TIME", ""))
+        return await self._fetch_last_activity(deal_id, type_id=1)
 
     async def fetch_deal_detail(self, deal_id: int) -> dict:
         """Fetch deal details: title, stage, dates."""

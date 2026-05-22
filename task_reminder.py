@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from bitrix import Bitrix
-from db import get_all_mops, is_reminder_sent, mark_reminder_sent, cleanup_old_reminders
+from db import get_all_mops, is_reminder_sent, mark_reminder_sent
 from ai_advisor import get_recommendation
 
 log = logging.getLogger(__name__)
@@ -13,16 +13,9 @@ WINDOW_END_MIN = 13
 
 
 def extract_deal_id(task: dict):
-    crm = task.get("ufCrmTask") or task.get("UF_CRM_TASK") or []
-    if isinstance(crm, str):
-        crm = [crm]
-    for ref in crm:
-        if isinstance(ref, str) and ref.upper().startswith("D_"):
-            try:
-                return int(ref.split("_")[1])
-            except (ValueError, IndexError):
-                pass
-    return None
+    """Return the first deal ID linked to the task, or None."""
+    ids = Bitrix._extract_deal_ids([task])
+    return ids[0] if ids else None
 
 
 def format_reminder_message(
@@ -128,5 +121,3 @@ async def check_upcoming_tasks(ctx) -> None:
                 await process_task(bx, mop, task, bot)
         except Exception as e:
             log.error("Error checking tasks for %s: %s", mop["name"], e)
-
-    cleanup_old_reminders(days=7)

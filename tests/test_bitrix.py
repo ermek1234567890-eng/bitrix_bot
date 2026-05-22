@@ -33,33 +33,34 @@ async def test_fetch_mop_upcoming_tasks_keeps_only_deal_tasks(bx):
 
 
 async def test_fetch_last_call_returns_most_recent(bx):
+    # API returns results in DESC order; first item is most recent.
     activities = [
-        {"ID": "10", "TYPE_ID": "2", "START_TIME": "2026-05-20T10:00:00", "DESCRIPTION": "Звонок 1"},
         {"ID": "11", "TYPE_ID": "2", "START_TIME": "2026-05-22T10:00:00", "DESCRIPTION": "Звонок 2"},
+        {"ID": "10", "TYPE_ID": "2", "START_TIME": "2026-05-20T10:00:00", "DESCRIPTION": "Звонок 1"},
     ]
-    with patch.object(bx, "list_all", new=AsyncMock(return_value=activities)):
+    with patch.object(bx, "call", new=AsyncMock(return_value={"result": activities})):
         result = await bx.fetch_last_call(100)
     assert result["ID"] == "11"
 
 
 async def test_fetch_last_call_returns_none_when_empty(bx):
-    with patch.object(bx, "list_all", new=AsyncMock(return_value=[])):
+    with patch.object(bx, "call", new=AsyncMock(return_value={"result": []})):
         result = await bx.fetch_last_call(100)
     assert result is None
 
 
 async def test_fetch_last_visit_returns_most_recent(bx):
     activities = [
-        {"ID": "20", "TYPE_ID": "1", "START_TIME": "2026-05-15T10:00:00", "DESCRIPTION": "Визит 1"},
         {"ID": "21", "TYPE_ID": "1", "START_TIME": "2026-05-18T10:00:00", "DESCRIPTION": "Визит 2"},
+        {"ID": "20", "TYPE_ID": "1", "START_TIME": "2026-05-15T10:00:00", "DESCRIPTION": "Визит 1"},
     ]
-    with patch.object(bx, "list_all", new=AsyncMock(return_value=activities)):
+    with patch.object(bx, "call", new=AsyncMock(return_value={"result": activities})):
         result = await bx.fetch_last_visit(100)
     assert result["ID"] == "21"
 
 
 async def test_fetch_last_visit_returns_none_when_empty(bx):
-    with patch.object(bx, "list_all", new=AsyncMock(return_value=[])):
+    with patch.object(bx, "call", new=AsyncMock(return_value={"result": []})):
         result = await bx.fetch_last_visit(100)
     assert result is None
 

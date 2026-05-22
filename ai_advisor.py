@@ -5,6 +5,16 @@ import anthropic
 
 log = logging.getLogger(__name__)
 
+_client: anthropic.Anthropic | None = None
+
+
+def _get_client() -> anthropic.Anthropic:
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    return _client
+
+
 SYSTEM_PROMPT = """Ты — эксперт по продажам первичной недвижимости в Алматы.
 Твоя задача — помочь менеджеру ЖК Керуен подготовиться к звонку с клиентом.
 
@@ -28,7 +38,7 @@ def _days_since(date_str: str) -> int:
 
 def get_recommendation(deal: dict, call, visit) -> str:
     try:
-        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+        client = _get_client()
 
         days_in_stage = _days_since(deal.get("DATE_MODIFY", ""))
         parts = [

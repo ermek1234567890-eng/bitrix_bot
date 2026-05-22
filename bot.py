@@ -30,6 +30,13 @@ from db import (
 from bitrix import Bitrix
 from reports import compute_metrics, format_regular_report, format_plan_fact_report, METRICS
 from task_reminder import check_upcoming_tasks
+from db import cleanup_old_reminders as _cleanup_old_reminders
+
+
+async def _daily_cleanup_reminders(ctx) -> None:
+    """Scheduled job — purge reminder dedup records older than 7 days."""
+    _cleanup_old_reminders(days=7)
+    log.info("Old reminders cleaned up")
 from excel_report import generate_regular_excel, generate_planfact_excel
 from telegram import InputFile
 
@@ -386,8 +393,7 @@ async def _generate_report(q, ctx):
         for m in managers:
             manager_map[m["bitrix_id"]] = m.get("short_name") or m["name"].split()[0]
 
-        from datetime import date as dclass
-        df = dclass.fromisoformat(date_from)
+        df = date.fromisoformat(date_from)
 
         if rpt_type == "regular":
             # Short text summary
@@ -490,10 +496,7 @@ async def build_task_report():
             "bitrix_id": bid,
         }
 
-    # Sequential — retry logic in call() handles any 429s
-    results = []
-    for label in TASK_MANAGERS:
-        results.append(await get_manager_data(label))
+    results = list(await asyncio.gather(*[get_manager_data(label) for label in TASK_MANAGERS]))
 
     date_str = date.today().strftime("%d.%m.%Y")
     # Only header — all data is in the clickable button rows below
@@ -1148,6 +1151,11 @@ def main():
         name="check_upcoming_tasks",
     )
     log.info("Task reminder job scheduled every 5 minutes")
+    app.job_queue.run_daily(
+        _daily_cleanup_reminders,
+        time=dtime(3, 0, tzinfo=almaty),
+        name="cleanup_old_reminders",
+    )
     app.run_polling(drop_pending_updates=True)
 
 

@@ -162,15 +162,23 @@ def find_managers_by_names(short_names: list) -> dict:
     """
     Find managers by short_name containing any of the given names.
     Returns dict: {search_name: manager_row or None}
+    Uses a single query and matches each search name against results in Python.
     """
-    result = {}
+    if not short_names:
+        return {}
     with get_conn() as conn:
-        for name in short_names:
-            row = conn.execute(
-                "SELECT bitrix_id, name, short_name FROM managers WHERE short_name LIKE ? AND is_active=1 LIMIT 1",
-                (f"%{name}%",)
-            ).fetchone()
-            result[name] = dict(row) if row else None
+        rows = conn.execute(
+            "SELECT bitrix_id, name, short_name FROM managers WHERE is_active=1"
+        ).fetchall()
+    all_managers = [dict(r) for r in rows]
+    result = {}
+    for name in short_names:
+        name_lower = name.lower()
+        match = next(
+            (m for m in all_managers if name_lower in (m.get("short_name") or "").lower()),
+            None,
+        )
+        result[name] = match
     return result
 
 

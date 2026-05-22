@@ -51,10 +51,13 @@ async def compute_metrics(
         s.strip() for s in (db_get("ped_stage_ids") or "").split(",") if s.strip()
     )
 
-    bx = Bitrix()
+    # If no managers specified, use all managers from DB
+    if not manager_ids:
+        from db import get_managers as _get_mgrs
+        manager_ids = [m["bitrix_id"] for m in _get_mgrs()]
 
-    # Resolve manager_ids to pass to API (None = no filter)
-    api_mgr_ids = manager_ids if manager_ids else None
+    bx = Bitrix()
+    api_mgr_ids = None  # filter in Python, not in API
 
     # Fetch meeting deals (filtered by project if selected)
     meeting_deals = await bx.fetch_meeting_deals(
@@ -81,8 +84,11 @@ async def compute_metrics(
         return tracked[mid]
 
     # Process meeting deals
+    # Use "Менеджер ОП" if set, else fall back to ASSIGNED_BY_ID
+    op_mgr_field = db_get("op_manager_field")
     for deal in meeting_deals:
-        mid = int(deal.get("ASSIGNED_BY_ID", 0))
+        op_val = deal.get(op_mgr_field) if op_mgr_field else None
+        mid = int(op_val) if op_val else int(deal.get("ASSIGNED_BY_ID", 0) or 0)
         if manager_ids and mid not in tracked:
             continue
         row = get_row(mid)
@@ -95,21 +101,45 @@ async def compute_metrics(
         if semantic == "F":
             row["closed"] += 1
 
-        # Classify source via "Аналитика встречи - фиксация" field (enumeration IDs)
+        # Classify source using "Источника трафика" field (primary)
+        # fallback: "Аналитика встречи" field, then PREVIOUS_STAGE_ID
         is_agent = False
-        is_ped = False
-        if source_field:
-            src_val = str(deal.get(source_field, ""))
-            # src_val is enum item ID or list of IDs
-            src_ids = set(src_val.replace(";", ",").split(",")) if src_val else set()
-            agent_ids = set(
-                s.strip() for s in (db_get("source_agent_ids") or "").split(",") if s.strip()
-            )
-            ped_ids = set(
-                s.strip() for s in (db_get("source_ped_ids") or "").split(",") if s.strip()
-            )
-            is_agent = bool(src_ids & agent_ids)
-            is_ped = bool(src_ids & ped_ids)
+        is_ped   = False
+
+        traffic_field     = db_get("traffic_source_field")
+        traffic_agent_ids = set(s.strip() for s in (db_get("traffic_agent_ids") or "").split(",") if s.strip())
+        traffic_ped_ids   = set(s.strip() for s in (db_get("traffic_ped_ids")   or "").split(",") if s.strip())
+
+        # 1. Check "Источника трафика"
+        if traffic_field:
+            tv = str(deal.get(traffic_field, "") or "")
+            tv_ids = set(tv.replace(";", ",").split(",")) if tv else set()
+            if tv_ids & traffic_agent_ids:
+                is_agent = True
+            elif tv_ids & traffic_ped_ids:
+                is_ped = True
+
+        # 2. Fallback: "Аналитика встречи" field
+        if not is_agent and not is_ped and source_field:
+            sv = str(deal.get(source_field, "") or "")
+            sv_ids = set(sv.replace(";", ",").split(",")) if sv else set()
+            agent_src = set(s.strip() for s in (db_get("source_agent_ids") or "").split(",") if s.strip())
+            ped_src   = set(s.strip() for s in (db_get("source_ped_ids")   or "").split(",") if s.strip())
+            if sv_ids & agent_src:
+                is_agent = True
+            elif sv_ids & ped_src:
+                is_ped = True
+
+        # 3. Fallback: PREVIOUS_STAGE_ID
+        if not is_agent and not is_ped:
+            prev = str(deal.get("PREVIOUS_STAGE_ID", "") or "")
+            cur  = str(deal.get("STAGE_ID", "") or "")
+            agent_stages = set(s.strip() for s in (db_get("agent_stage_ids") or "").split(",") if s.strip())
+            ped_stages   = set(s.strip() for s in (db_get("ped_stage_ids")   or "").split(",") if s.strip())
+            if prev in agent_stages or cur in agent_stages:
+                is_agent = True
+            elif prev in ped_stages or cur in ped_stages:
+                is_ped = True
 
         if is_agent:
             row["agents"] += 1
