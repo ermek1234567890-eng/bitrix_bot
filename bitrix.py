@@ -337,7 +337,7 @@ class Bitrix:
         return await self.get_deals(flt, [])
 
     async def fetch_mop_upcoming_tasks(
-        self, user_id: int, window_start, window_end
+        self, user_id: int, window_start: "datetime", window_end: "datetime"
     ) -> list:
         """Tasks created by МОП, linked to a deal, with deadline in window."""
         ws = window_start.strftime("%Y-%m-%dT%H:%M:%S")
@@ -366,7 +366,7 @@ class Bitrix:
                 result.append(task)
         return result
 
-    async def fetch_last_call(self, deal_id: int):
+    async def fetch_last_call(self, deal_id: int) -> "dict | None":
         """Last phone call activity for a deal (TYPE_ID=2)."""
         activities = await self.list_all("crm.activity.list", {
             "filter": {"OWNER_TYPE_ID": 2, "OWNER_ID": deal_id, "TYPE_ID": 2},
@@ -377,7 +377,7 @@ class Bitrix:
             return None
         return max(activities, key=lambda a: a.get("START_TIME", ""))
 
-    async def fetch_last_visit(self, deal_id: int):
+    async def fetch_last_visit(self, deal_id: int) -> "dict | None":
         """Last meeting/visit activity for a deal (TYPE_ID=1)."""
         activities = await self.list_all("crm.activity.list", {
             "filter": {"OWNER_TYPE_ID": 2, "OWNER_ID": deal_id, "TYPE_ID": 1},
