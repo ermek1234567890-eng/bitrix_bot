@@ -67,7 +67,9 @@ def format_reminder_message(
 
 
 async def process_task(bx: Bitrix, mop: dict, task: dict, bot) -> None:
-    task_id = int(task.get("id") or task.get("ID", 0))
+    task_id = int(task.get("id") or task.get("ID") or 0)
+    if not task_id:
+        return
     if is_reminder_sent(task_id):
         return
 
@@ -85,7 +87,11 @@ async def process_task(bx: Bitrix, mop: dict, task: dict, bot) -> None:
         log.error("Error fetching data for task %s: %s", task_id, e)
         return
 
-    recommendation = get_recommendation(deal, call, visit)
+    try:
+        recommendation = get_recommendation(deal, call, visit)
+    except Exception as e:
+        log.error("get_recommendation failed for task %s: %s", task_id, e)
+        recommendation = "Рекомендация недоступна. Изучите историю клиента перед звонком."
     portal_url = bx.get_portal_url()
     text = format_reminder_message(deal, call, task, recommendation, portal_url, deal_id)
 
