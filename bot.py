@@ -29,6 +29,7 @@ from db import (
 )
 from bitrix import Bitrix
 from reports import compute_metrics, format_regular_report, format_plan_fact_report, METRICS
+from task_reminder import check_upcoming_tasks
 from excel_report import generate_regular_excel, generate_planfact_excel
 from telegram import InputFile
 
@@ -1140,6 +1141,13 @@ def main():
         name="daily_task_report",
     )
     log.info("Bot started, daily task report scheduled at 10:30 Almaty")
+    app.job_queue.run_repeating(
+        check_upcoming_tasks,
+        interval=300,
+        first=60,
+        name="check_upcoming_tasks",
+    )
+    log.info("Task reminder job scheduled every 5 minutes")
     app.run_polling(drop_pending_updates=True)
 
 
