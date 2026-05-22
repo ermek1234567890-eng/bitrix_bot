@@ -1,3 +1,6 @@
 python-telegram-bot[job-queue]
 httpx
 python-dotenv
+openpyxl
+pytz
+anthropic
