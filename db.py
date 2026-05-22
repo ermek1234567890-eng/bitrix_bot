@@ -38,6 +38,79 @@ def init_db():
         """)
 
 
+def init_mop_tables():
+    with get_conn() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS mop_telegram (
+                bitrix_id   INTEGER PRIMARY KEY,
+                telegram_id INTEGER NOT NULL,
+                name        TEXT
+            );
+            CREATE TABLE IF NOT EXISTS reminders_sent (
+                task_id INTEGER PRIMARY KEY,
+                sent_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_reminders_sent_at
+                ON reminders_sent(sent_at);
+        """)
+
+
+def upsert_mop(bitrix_id: int, telegram_id: int, name: str):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO mop_telegram (bitrix_id, telegram_id, name)
+            VALUES (?, ?, ?)
+            ON CONFLICT(bitrix_id) DO UPDATE SET
+                telegram_id = excluded.telegram_id,
+                name        = excluded.name
+        """, (bitrix_id, telegram_id, name))
+
+
+def get_mop_telegram(bitrix_id: int):
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT telegram_id FROM mop_telegram WHERE bitrix_id = ?",
+            (bitrix_id,)
+        ).fetchone()
+    return row["telegram_id"] if row else None
+
+
+def get_all_mops() -> list:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT bitrix_id, telegram_id, name FROM mop_telegram"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def is_reminder_sent(task_id: int) -> bool:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM reminders_sent WHERE task_id = ?",
+            (task_id,)
+        ).fetchone()
+    return row is not None
+
+
+def mark_reminder_sent(task_id: int):
+    from datetime import datetime
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO reminders_sent (task_id, sent_at) VALUES (?, ?)",
+            (task_id, datetime.utcnow().isoformat())
+        )
+
+
+def cleanup_old_reminders(days: int = 7):
+    from datetime import datetime, timedelta
+    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM reminders_sent WHERE sent_at < ?",
+            (cutoff,)
+        )
+
+
 # ---------- settings ----------
 
 def db_get(key: str, default=None):
@@ -82,6 +155,22 @@ def upsert_manager(bitrix_id: int, name: str, short_name: str = None):
 def toggle_manager(bitrix_id: int, active: int):
     with get_conn() as conn:
         conn.execute("UPDATE managers SET is_active=? WHERE bitrix_id=?", (active, bitrix_id))
+
+
+def find_managers_by_names(short_names: list) -> dict:
+    """
+    Find managers by short_name containing any of the given names.
+    Returns dict: {search_name: manager_row or None}
+    """
+    result = {}
+    with get_conn() as conn:
+        for name in short_names:
+            row = conn.execute(
+                "SELECT bitrix_id, name, short_name FROM managers WHERE short_name LIKE ? AND is_active=1 LIMIT 1",
+                (f"%{name}%",)
+            ).fetchone()
+            result[name] = dict(row) if row else None
+    return result
 
 
 # ---------- projects ----------
