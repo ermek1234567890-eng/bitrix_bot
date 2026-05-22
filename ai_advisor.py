@@ -1,6 +1,9 @@
+import logging
 import os
 from datetime import datetime
 import anthropic
+
+log = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """Ты — эксперт по продажам первичной недвижимости в Алматы.
 Твоя задача — помочь менеджеру ЖК Керуен подготовиться к звонку с клиентом.
@@ -59,4 +62,5 @@ def get_recommendation(deal: dict, call, visit) -> str:
         return response.content[0].text.strip()
 
     except Exception:
+        log.exception("AI advisor error for deal %s", deal.get("TITLE", "unknown"))
         return "Рекомендация недоступна. Изучите историю клиента перед звонком."
