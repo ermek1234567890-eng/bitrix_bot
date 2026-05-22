@@ -5,8 +5,9 @@ Bitrix24 Report Bot
 import asyncio
 import logging
 import os
-from datetime import date, timedelta
+from datetime import date, timedelta, time as dtime
 import calendar
+import pytz
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,9 +24,13 @@ from db import (
     get_managers, upsert_manager, toggle_manager,
     get_projects, upsert_project, get_project_enum_id,
     set_plan, get_plan,
+    find_managers_by_names,
+    upsert_mop, get_all_mops, init_mop_tables,
 )
 from bitrix import Bitrix
 from reports import compute_metrics, format_regular_report, format_plan_fact_report, METRICS
+from excel_report import generate_regular_excel, generate_planfact_excel
+from telegram import InputFile
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -51,6 +56,10 @@ ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
     SETUP_PIPELINE_PICK, SETUP_STAGE_PICK, SETUP_STAGE_TYPE,
     SETUP_USER_PICK,
 ) = range(20, 27)
+
+(
+    MOP_PICK, MOP_TG_ID,
+) = range(30, 32)
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -80,13 +89,20 @@ async def safe_edit(query, text, reply_markup=None, parse_mode=ParseMode.HTML):
 # ─── /start ───────────────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if is_admin(uid):
+        chat_id = str(update.effective_chat.id)
+        db_set("task_chat_id", chat_id)
+        log.info("task_chat_id saved: %s", chat_id)
     await update.message.reply_text(
         "👋 <b>Bitrix24 Report Bot</b>\n\n"
         "Команды:\n"
         "• /report — сформировать отчёт\n"
+        "• /tasks — отчёт по задачам\n"
         "• /setplan — ввести плановые цифры\n"
         "• /managers — управление менеджерами\n"
         "• /setup — настройка полей Bitrix24\n"
+        "• /mop — привязка менеджеров к Telegram\n"
         "• /help — справка",
         parse_mode=ParseMode.HTML,
     )
@@ -272,7 +288,8 @@ async def rpt_managers(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     valid_ids = {m["bitrix_id"] for m in managers}
 
     if q.data == "mgr:all":
-        ctx.user_data["sel_managers"] = []
+        all_ids = [m["bitrix_id"] for m in managers]
+        ctx.user_data["sel_managers"] = all_ids
         await q.answer("Выбраны все менеджеры")
         return await _render_manager_selector(q, ctx, edit=True)
     elif q.data == "mgr:done":
@@ -346,7 +363,19 @@ async def _generate_report(q, ctx):
     await safe_edit(q, "⏳ Загружаю данные из Bitrix24...")
 
     try:
-        data, err = await compute_metrics(date_from, date_to, manager_ids, project_enum_ids or None)
+        data, err = await asyncio.wait_for(
+            compute_metrics(date_from, date_to, manager_ids, project_enum_ids or None),
+            timeout=90.0
+        )
+    except asyncio.TimeoutError:
+        await safe_edit(q, "⏱ Bitrix24 не отвечает. Попробуйте ещё раз.", parse_mode=ParseMode.HTML)
+        return ConversationHandler.END
+    except Exception as e:
+        log.exception("compute_metrics error")
+        await safe_edit(q, f"❌ Ошибка загрузки данных:\n<code>{e}</code>", parse_mode=ParseMode.HTML)
+        return ConversationHandler.END
+
+    try:
         if err:
             await safe_edit(q, err, parse_mode=ParseMode.HTML)
             return ConversationHandler.END
@@ -356,17 +385,40 @@ async def _generate_report(q, ctx):
         for m in managers:
             manager_map[m["bitrix_id"]] = m.get("short_name") or m["name"].split()[0]
 
-        if rpt_type == "regular":
-            text = format_regular_report(data, manager_map, date_from, date_to, proj_label)
-        else:
-            from datetime import date as dclass
-            df = dclass.fromisoformat(date_from)
-            text = format_plan_fact_report(data, date_from, date_to, df.year, df.month, proj_label)
+        from datetime import date as dclass
+        df = dclass.fromisoformat(date_from)
 
-        await safe_edit(q, text, parse_mode=ParseMode.HTML)
+        if rpt_type == "regular":
+            # Short text summary
+            total = data.get("total", {})
+            meets = total.get("meetings", 0)
+            dfb   = total.get("dfb", 0)
+            cr3   = f"{round(dfb/meets*100)}%" if meets else "0%"
+            summary = (
+                f"📊 <b>Регулярный менеджмент</b>\n"
+                f"🗂 {proj_label} | 📅 {date_from} — {date_to}\n\n"
+                f"Встречи: <b>{meets}</b> | ДФБ: <b>{dfb}</b> | CR3: <b>{cr3}</b>\n\n"
+                f"📎 Полный отчёт в файле Excel ниже"
+            )
+            await safe_edit(q, summary, parse_mode=ParseMode.HTML)
+            xlsx = generate_regular_excel(data, manager_map, date_from, date_to, proj_label)
+            fname = f"report_{date_from}_{date_to}.xlsx"
+            await q.message.reply_document(document=InputFile(xlsx, filename=fname))
+
+        else:
+            summary = (
+                f"📈 <b>План vs Факт</b>\n"
+                f"🗂 {proj_label} | 📅 {date_from} — {date_to}\n\n"
+                f"📎 Отчёт в файле Excel ниже"
+            )
+            await safe_edit(q, summary, parse_mode=ParseMode.HTML)
+            xlsx = generate_planfact_excel(data, date_from, date_to, df.year, df.month, proj_label)
+            fname = f"plan_fact_{date_from}_{date_to}.xlsx"
+            await q.message.reply_document(document=InputFile(xlsx, filename=fname))
+
     except Exception as e:
         log.exception("Report generation error")
-        await safe_edit(q, f"❌ Ошибка при формировании отчёта:\n<code>{e}</code>", parse_mode=ParseMode.HTML)
+        await safe_edit(q, f"❌ Ошибка:\n<code>{e}</code>", parse_mode=ParseMode.HTML)
 
     return ConversationHandler.END
 
@@ -389,6 +441,254 @@ async def cmd_report_from_query(q, ctx):
 async def rpt_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Отменено.")
     return ConversationHandler.END
+
+# ─── Task report ──────────────────────────────────────────────────────────────
+
+TASK_MANAGERS = ["Самал", "Заир", "Ернур", "Салима"]
+_TASK_NAME_W  = max(len(n) for n in TASK_MANAGERS)   # 6 (Салима)
+_FIG          = " "   # figure space — ширина одной цифры
+
+
+def _rpad(n, width=3) -> str:
+    """Right-align number to `width` digit-widths using figure spaces."""
+    s = str(n)
+    return _FIG * (width - len(s)) + s
+
+
+def _npad(name) -> str:
+    """Pad name to fixed width with regular spaces."""
+    return name + " " * (_TASK_NAME_W - len(name))
+
+
+async def build_task_report():
+    """
+    Fetch counts for all managers in parallel.
+    Returns (text, markup) where each manager is ONE clickable button-row.
+    """
+    bx = Bitrix()
+    today = date.today().isoformat()
+    managers = find_managers_by_names(TASK_MANAGERS)
+
+    async def get_manager_data(label):
+        mgr = managers.get(label)
+        if not mgr:
+            return label, None
+        bid = mgr["bitrix_id"]
+        try:
+            counts = await bx.fetch_task_counts(bid, today)
+        except Exception:
+            counts = {"overdue": -1, "today": -1}
+        try:
+            no_task_deals = await bx.fetch_deals_no_tasks(bid)
+        except Exception:
+            no_task_deals = []
+        return label, {
+            "overdue":  counts.get("overdue", -1),
+            "today":    counts.get("today", -1),
+            "no_tasks": len(no_task_deals) if isinstance(no_task_deals, list) else 0,
+            "bitrix_id": bid,
+        }
+
+    # Sequential — retry logic in call() handles any 429s
+    results = []
+    for label in TASK_MANAGERS:
+        results.append(await get_manager_data(label))
+
+    date_str = date.today().strftime("%d.%m.%Y")
+    # Only header — all data is in the clickable button rows below
+    text = f"📋 <b>Отчёт по задачам — {date_str}</b>"
+
+    keyboard_rows = []
+    for label, data in results:
+        if data is None:
+            keyboard_rows.append([
+                InlineKeyboardButton(f"👤 {label} — нет в базе", callback_data="tsk:none")
+            ])
+            continue
+
+        ovd  = data["overdue"]
+        tdy  = data["today"]
+        ntsk = data["no_tasks"]
+        bid  = data["bitrix_id"]
+        ovd_s = str(ovd)  if ovd  >= 0 else "?"
+        tdy_s = str(tdy)  if tdy  >= 0 else "?"
+
+        btn = f"👤 {_npad(label)}  📍{_rpad(ovd_s)}  📅{_rpad(tdy_s)}  ⬛{_rpad(ntsk)}"
+        keyboard_rows.append([
+            InlineKeyboardButton(btn, callback_data=f"tsk:{bid}:{ovd_s}:{tdy_s}:{ntsk}")
+        ])
+
+    markup = InlineKeyboardMarkup(keyboard_rows)
+    return text, markup
+
+
+async def cmd_tasks(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    msg = await update.message.reply_text("⏳ Загружаю задачи из Bitrix24...")
+    try:
+        text, markup = await asyncio.wait_for(build_task_report(), timeout=90.0)
+        ctx.bot_data["last_task_report"] = (text, markup)   # кэш
+        await msg.edit_text(text, reply_markup=markup, parse_mode=ParseMode.HTML)
+    except asyncio.TimeoutError:
+        await msg.edit_text("⏱ Bitrix24 не отвечает. Попробуйте позже.")
+    except Exception as e:
+        log.exception("cmd_tasks error")
+        await msg.edit_text(f"❌ Ошибка: {e}")
+
+
+async def task_drilldown_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """
+    Handles all tsk: callbacks.
+
+    Callback data shapes:
+      tsk:back                    → regenerate main report
+      tsk:none                    → manager not found, ignore
+      tsk:{bid}:{ovd}:{tdy}:{ntsk} → show sub-menu for that manager
+      tsk:{bid}:o/t/n             → fetch & show deal list
+    """
+    q = update.callback_query
+    await q.answer()
+
+    parts = q.data.split(":")
+
+    # ── Ignore ─────────────────────────────────────────────────────────────────
+    if parts[1] == "none":
+        return
+
+    # ── Back to summary ────────────────────────────────────────────────────────
+    if parts[1] == "back":
+        cached = ctx.bot_data.get("last_task_report")
+        if cached:
+            # Мгновенно — берём из кэша
+            text, markup = cached
+            await safe_edit(q, text, markup, parse_mode=ParseMode.HTML)
+        else:
+            # Кэш пуст (перезапуск бота) — грузим заново
+            await safe_edit(q, "⏳ Обновляю отчёт...")
+            try:
+                text, markup = await asyncio.wait_for(build_task_report(), timeout=90.0)
+                ctx.bot_data["last_task_report"] = (text, markup)
+                await safe_edit(q, text, markup, parse_mode=ParseMode.HTML)
+            except Exception as e:
+                await safe_edit(q, f"❌ Ошибка: {e}")
+        return
+
+    try:
+        bid = int(parts[1])
+    except (ValueError, IndexError):
+        return
+
+    managers  = find_managers_by_names(TASK_MANAGERS)
+    mgr_label = next(
+        (l for l, m in managers.items() if m and m["bitrix_id"] == bid),
+        f"ID:{bid}"
+    )
+
+    # ── Manager row clicked → sub-menu (5 parts: tsk:bid:ovd:tdy:ntsk) ────────
+    if len(parts) == 5:
+        ovd_s, tdy_s, ntsk_s = parts[2], parts[3], parts[4]
+        submenu = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"📍  Просроченные — {ovd_s}",  callback_data=f"tsk:{bid}:o")],
+            [InlineKeyboardButton(f"📅  На сегодня — {tdy_s}",    callback_data=f"tsk:{bid}:t")],
+            [InlineKeyboardButton(f"⬛  Без задач — {ntsk_s}",    callback_data=f"tsk:{bid}:n")],
+            [InlineKeyboardButton("⬅️  Назад к отчёту",           callback_data="tsk:back")],
+        ])
+        await safe_edit(
+            q,
+            f"👤 <b>{mgr_label}</b> — выберите категорию:",
+            submenu,
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    # ── Category chosen → deal list (3 parts: tsk:bid:type) ───────────────────
+    if len(parts) != 3:
+        return
+
+    filter_type = parts[2]   # o / t / n
+    type_labels = {"o": "просроченные", "t": "на сегодня", "n": "без задач"}
+    type_label  = type_labels.get(filter_type, "")
+
+    await safe_edit(
+        q,
+        f"⏳ Загружаю: <b>{mgr_label} — {type_label}</b>...",
+        parse_mode=ParseMode.HTML,
+    )
+
+    back_kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("⬅️  Назад к отчёту", callback_data="tsk:back")
+    ]])
+
+    try:
+        bx     = Bitrix()
+        today  = date.today().isoformat()
+        portal = bx.get_portal_url()
+
+        if filter_type in ("o", "t"):
+            ft       = "overdue" if filter_type == "o" else "today"
+            deal_ids = await asyncio.wait_for(
+                bx.fetch_deal_ids_from_tasks(bid, ft, today), timeout=30.0
+            )
+            deals = await asyncio.wait_for(
+                bx.fetch_deals_by_ids(deal_ids), timeout=30.0
+            ) if deal_ids else []
+        else:
+            deals = await asyncio.wait_for(
+                bx.fetch_deals_no_tasks(bid), timeout=60.0
+            )
+
+        if not deals:
+            await safe_edit(
+                q,
+                f"✅ <b>{mgr_label} — {type_label}</b>\n\nСделок нет!",
+                back_kb, parse_mode=ParseMode.HTML,
+            )
+            return
+
+        MAX_DEALS = 40
+        header = f"📋 <b>{mgr_label} — {type_label}</b> ({len(deals)} сд.)\n\n"
+        lines  = []
+        for d in deals[:MAX_DEALS]:
+            did   = d.get("ID") or d.get("id") or ""
+            title = (d.get("TITLE") or d.get("title") or f"Сделка #{did}").strip()
+            url   = f"{portal}/crm/deal/details/{did}/"
+            lines.append(f'• <a href="{url}">{title}</a>')
+
+        text = header + "\n".join(lines)
+        if len(deals) > MAX_DEALS:
+            text += f"\n\n<i>...и ещё {len(deals) - MAX_DEALS} сделок</i>"
+
+        await safe_edit(q, text, back_kb, parse_mode=ParseMode.HTML)
+
+    except asyncio.TimeoutError:
+        await safe_edit(q, "⏱ Timeout. Попробуйте ещё раз.", back_kb)
+    except Exception as e:
+        log.exception("task_drilldown_callback error")
+        await safe_edit(q, f"❌ Ошибка: {e}", back_kb)
+
+
+async def daily_task_report(ctx: ContextTypes.DEFAULT_TYPE):
+    """Scheduled job — sends task report to admin chat."""
+    chat_id = db_get("task_chat_id")
+    if not chat_id:
+        log.warning("daily_task_report: task_chat_id not set, skipping")
+        return
+    try:
+        text, markup = await asyncio.wait_for(build_task_report(), timeout=90.0)
+        ctx.bot_data["last_task_report"] = (text, markup)   # кэш
+        await ctx.bot.send_message(
+            chat_id=int(chat_id), text=text,
+            reply_markup=markup, parse_mode=ParseMode.HTML,
+        )
+    except Exception as e:
+        log.exception("daily_task_report error")
+        try:
+            await ctx.bot.send_message(
+                chat_id=int(chat_id),
+                text=f"❌ Ошибка отчёта по задачам: {e}",
+            )
+        except Exception:
+            pass
+
 
 # ─── /managers ────────────────────────────────────────────────────────────────
 
@@ -689,10 +989,83 @@ async def setup_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Настройка отменена.")
     return ConversationHandler.END
 
+# ─── /mop conversation ────────────────────────────────────────────────────────
+
+async def cmd_mop(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("⛔ Нет доступа.")
+        return ConversationHandler.END
+
+    managers = get_managers()
+    if not managers:
+        await update.message.reply_text("⚠️ Сначала загрузите менеджеров через /managers")
+        return ConversationHandler.END
+
+    linked = {m["bitrix_id"]: m for m in get_all_mops()}
+    rows = []
+    for m in managers:
+        bid = m["bitrix_id"]
+        tg = linked[bid]["telegram_id"] if bid in linked else None
+        icon = "✅" if tg else "☐"
+        label = f"{icon} {m['short_name']}" + (f" (tg:{tg})" if tg else "")
+        rows.append([(label, f"mop:{bid}:{m['short_name']}")])
+    rows.append([("❌ Отмена", "mop:cancel")])
+
+    await update.message.reply_text(
+        "👥 <b>Привязка МОПов к Telegram</b>\nВыберите менеджера:",
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb(rows),
+    )
+    return MOP_PICK
+
+
+async def mop_pick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    if q.data == "mop:cancel":
+        await safe_edit(q, "Отменено.")
+        return ConversationHandler.END
+
+    _, bitrix_id, name = q.data.split(":", 2)
+    ctx.user_data["mop_bitrix_id"] = int(bitrix_id)
+    ctx.user_data["mop_name"] = name
+    await safe_edit(
+        q,
+        f"👤 <b>{name}</b>\n\n"
+        f"Введите Telegram ID этого менеджера.\n"
+        f"<i>МОП может узнать свой ID у @userinfobot</i>",
+        parse_mode=ParseMode.HTML,
+    )
+    return MOP_TG_ID
+
+
+async def mop_tg_id(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    try:
+        tg_id = int(txt)
+    except ValueError:
+        await update.message.reply_text("❌ Введите числовой Telegram ID.")
+        return MOP_TG_ID
+
+    bitrix_id = ctx.user_data["mop_bitrix_id"]
+    name = ctx.user_data["mop_name"]
+    upsert_mop(bitrix_id, tg_id, name)
+    await update.message.reply_text(
+        f"✅ <b>{name}</b> привязан к Telegram ID <code>{tg_id}</code>",
+        parse_mode=ParseMode.HTML,
+    )
+    return ConversationHandler.END
+
+
+async def mop_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Отменено.")
+    return ConversationHandler.END
+
 # ─── Application builder ──────────────────────────────────────────────────────
 
 def main():
     init_db()
+    init_mop_tables()
     from init_data import seed
     seed()
     app = Application.builder().token(TOKEN).build()
@@ -739,14 +1112,34 @@ def main():
         allow_reentry=True,
     )
 
+    mop_conv = ConversationHandler(
+        entry_points=[CommandHandler("mop", cmd_mop)],
+        states={
+            MOP_PICK: [CallbackQueryHandler(mop_pick, pattern="^mop:")],
+            MOP_TG_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, mop_tg_id)],
+        },
+        fallbacks=[CommandHandler("cancel", mop_cancel)],
+        allow_reentry=True,
+    )
+
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("managers", cmd_managers))
+    app.add_handler(CommandHandler("tasks", cmd_tasks))
+    app.add_handler(CallbackQueryHandler(task_drilldown_callback, pattern="^tsk:"))
     app.add_handler(rpt_conv)
     app.add_handler(plan_conv)
     app.add_handler(setup_conv)
+    app.add_handler(mop_conv)
 
-    log.info("Bot started")
+    # Daily task report at 10:30 Almaty (UTC+5) = 05:30 UTC
+    almaty = pytz.timezone("Asia/Almaty")
+    app.job_queue.run_daily(
+        daily_task_report,
+        time=dtime(10, 30, tzinfo=almaty),
+        name="daily_task_report",
+    )
+    log.info("Bot started, daily task report scheduled at 10:30 Almaty")
     app.run_polling(drop_pending_updates=True)
 
 
