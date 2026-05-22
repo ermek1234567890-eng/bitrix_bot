@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from datetime import datetime, timedelta, timezone
 
 DB_PATH = os.getenv("DB_PATH", "bot.db")
 
@@ -37,6 +38,8 @@ def init_db():
             );
         """)
 
+
+# ---------- mop / reminders ----------
 
 def init_mop_tables():
     with get_conn() as conn:
@@ -93,7 +96,6 @@ def is_reminder_sent(task_id: int) -> bool:
 
 
 def mark_reminder_sent(task_id: int):
-    from datetime import datetime, timezone
     with get_conn() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO reminders_sent (task_id, sent_at) VALUES (?, ?)",
@@ -102,7 +104,6 @@ def mark_reminder_sent(task_id: int):
 
 
 def cleanup_old_reminders(days: int = 7):
-    from datetime import datetime, timedelta, timezone
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     with get_conn() as conn:
         conn.execute(

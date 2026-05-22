@@ -64,7 +64,7 @@ def test_mark_reminder_sent_idempotent():
 def test_cleanup_old_reminders():
     import db
     db.mark_reminder_sent(10)
-    db.cleanup_old_reminders(days=0)
+    db.cleanup_old_reminders(days=-1)
     assert not db.is_reminder_sent(10)
 
 
@@ -73,3 +73,13 @@ def test_cleanup_keeps_recent_reminders():
     db.mark_reminder_sent(20)
     db.cleanup_old_reminders(days=7)
     assert db.is_reminder_sent(20)
+
+
+def test_find_managers_by_names():
+    import db
+    db.upsert_manager(1, "Иванов Иван", "Иван")
+    db.upsert_manager(2, "Петрова Мария", "Мария")
+    result = db.find_managers_by_names(["Иван", "Мария", "Неизвестный"])
+    assert result["Иван"]["bitrix_id"] == 1
+    assert result["Мария"]["bitrix_id"] == 2
+    assert result["Неизвестный"] is None
