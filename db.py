@@ -93,17 +93,17 @@ def is_reminder_sent(task_id: int) -> bool:
 
 
 def mark_reminder_sent(task_id: int):
-    from datetime import datetime
+    from datetime import datetime, timezone
     with get_conn() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO reminders_sent (task_id, sent_at) VALUES (?, ?)",
-            (task_id, datetime.utcnow().isoformat())
+            (task_id, datetime.now(timezone.utc).isoformat())
         )
 
 
 def cleanup_old_reminders(days: int = 7):
-    from datetime import datetime, timedelta
-    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     with get_conn() as conn:
         conn.execute(
             "DELETE FROM reminders_sent WHERE sent_at < ?",
