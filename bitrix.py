@@ -2,6 +2,9 @@ import asyncio
 import httpx
 from db import db_get
 import os
+import logging
+
+log = logging.getLogger(__name__)
 
 BITRIX_WEBHOOK = os.getenv("BITRIX_WEBHOOK", "")
 MAX_PAGES   = 40    # не более 40 страниц × 50 записей = 2000 сделок
@@ -245,7 +248,8 @@ class Bitrix:
                 }),
                 timeout=API_TIMEOUT,
             )
-        except Exception:
+        except Exception as e:
+            log.error(f"fetch_task_counts error for user {user_id}: {e}", exc_info=True)
             return {"overdue": -1, "today": -1}
 
         def _count(resp):
