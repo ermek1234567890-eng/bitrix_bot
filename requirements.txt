@@ -3,6 +3,6 @@ httpx
 python-dotenv
 openpyxl
 pytz
-anthropic
+google-generativeai
 pytest
 pytest-asyncio

@@ -1,18 +1,19 @@
 import logging
 import os
 from datetime import datetime
-import anthropic
+import google.generativeai as genai
 
 log = logging.getLogger(__name__)
 
-_client: anthropic.Anthropic | None = None
+_model = None
 
 
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-    return _client
+def _get_model():
+    global _model
+    if _model is None:
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
+        _model = genai.GenerativeModel("gemini-2.0-flash")
+    return _model
 
 
 SYSTEM_PROMPT = """Ты — эксперт по продажам первичной недвижимости в Алматы.
@@ -38,7 +39,7 @@ def _days_since(date_str: str) -> int:
 
 def get_recommendation(deal: dict, call, visit) -> str:
     try:
-        client = _get_client()
+        model = _get_model()
 
         days_in_stage = _days_since(deal.get("DATE_MODIFY", ""))
         parts = [
@@ -63,13 +64,9 @@ def get_recommendation(deal: dict, call, visit) -> str:
         if not call and not visit:
             parts.append("\nИстория общения недоступна. Дай рекомендацию по этапу сделки.")
 
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=300,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": "\n".join(parts)}],
-        )
-        return response.content[0].text.strip()
+        prompt = SYSTEM_PROMPT + "\n\n" + "\n".join(parts)
+        response = model.generate_content(prompt)
+        return response.text.strip()
 
     except Exception:
         log.exception("AI advisor error for deal %s", deal.get("TITLE", "unknown"))

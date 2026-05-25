@@ -4,13 +4,13 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
+os.environ.setdefault("GEMINI_API_KEY", "test-key")
 
 
 def _mock_response(text: str):
-    msg = MagicMock()
-    msg.content = [MagicMock(text=text)]
-    return msg
+    resp = MagicMock()
+    resp.text = text
+    return resp
 
 
 def test_get_recommendation_with_call_and_visit():
@@ -20,9 +20,10 @@ def test_get_recommendation_with_call_and_visit():
     expected = "• Уточни позицию мужа\n• Возражение: цена\n• Предложи рассрочку"
 
     import ai_advisor
-    ai_advisor._client = None  # reset singleton so the mock is picked up
-    with patch("anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.return_value = _mock_response(expected)
+    ai_advisor._model = None
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel") as MockModel:
+        MockModel.return_value.generate_content.return_value = _mock_response(expected)
         result = ai_advisor.get_recommendation(deal, call, visit)
 
     assert "Уточни" in result
@@ -33,9 +34,10 @@ def test_get_recommendation_without_visit():
     call = {"DESCRIPTION": "Хочет скидку", "START_TIME": "2026-05-22T10:00:00"}
 
     import ai_advisor
-    ai_advisor._client = None
-    with patch("anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.return_value = _mock_response("• Работай со скидкой")
+    ai_advisor._model = None
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel") as MockModel:
+        MockModel.return_value.generate_content.return_value = _mock_response("• Работай со скидкой")
         result = ai_advisor.get_recommendation(deal, call, None)
 
     assert isinstance(result, str)
@@ -46,9 +48,10 @@ def test_get_recommendation_returns_fallback_on_error():
     deal = {"TITLE": "Тест", "STAGE_ID": "C1:NEW", "DATE_MODIFY": "2026-05-01T00:00:00"}
 
     import ai_advisor
-    ai_advisor._client = None
-    with patch("anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.side_effect = Exception("API error")
+    ai_advisor._model = None
+    with patch("google.generativeai.configure"), \
+         patch("google.generativeai.GenerativeModel") as MockModel:
+        MockModel.return_value.generate_content.side_effect = Exception("API error")
         result = ai_advisor.get_recommendation(deal, None, None)
 
     assert result == "Рекомендация недоступна. Изучите историю клиента перед звонком."
