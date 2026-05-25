@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from bitrix import Bitrix
-from db import get_all_mops, is_reminder_sent, mark_reminder_sent
+from db import get_all_mops, is_reminder_sent, mark_reminder_sent, db_get
 from ai_advisor import get_recommendation
 
 log = logging.getLogger(__name__)
@@ -37,7 +37,6 @@ def format_reminder_message(
     except Exception:
         stage_str = stage
 
-    call_block = ""
     if call:
         call_text = (call.get("DESCRIPTION") or call.get("SUBJECT") or "")[:400]
         try:
@@ -46,6 +45,8 @@ def format_reminder_message(
         except Exception:
             call_ago = ""
         call_block = f"\n\n📞 <b>Последний звонок</b> ({call_ago}):\n{call_text}"
+    else:
+        call_block = "\n\n📞 <b>Последний звонок:</b> записей звонков нет"
 
     deal_url = f"{portal_url}/crm/deal/details/{deal_id}/"
 
@@ -59,7 +60,7 @@ def format_reminder_message(
     )
 
 
-async def process_task(bx: Bitrix, mop: dict, task: dict, bot) -> None:
+async def process_task(bx: Bitrix, mop: dict, task: dict, bot, group_chat_id: int = None) -> None:
     task_id = int(task.get("id") or task.get("ID") or 0)
     if not task_id:
         return
@@ -70,10 +71,11 @@ async def process_task(bx: Bitrix, mop: dict, task: dict, bot) -> None:
     if not deal_id:
         return
 
+    mop_bitrix_id = mop.get("bitrix_id")
     try:
         deal, call, visit = await asyncio.gather(
             bx.fetch_deal_detail(deal_id),
-            bx.fetch_last_call(deal_id),
+            bx.fetch_last_call(deal_id, responsible_id=mop_bitrix_id),
             bx.fetch_last_visit(deal_id),
         )
     except Exception as e:
@@ -88,6 +90,8 @@ async def process_task(bx: Bitrix, mop: dict, task: dict, bot) -> None:
     portal_url = bx.get_portal_url()
     text = format_reminder_message(deal, call, task, recommendation, portal_url, deal_id)
 
+    sent = False
+    # 1. Send to МОП personally
     try:
         await bot.send_message(
             chat_id=mop["telegram_id"],
@@ -95,10 +99,26 @@ async def process_task(bx: Bitrix, mop: dict, task: dict, bot) -> None:
             parse_mode="HTML",
             disable_web_page_preview=True,
         )
-        mark_reminder_sent(task_id)
+        sent = True
         log.info("Reminder sent to %s for task %s", mop["name"], task_id)
     except Exception as e:
         log.error("Failed to send reminder to %s: %s", mop["name"], e)
+
+    # 2. Duplicate to group chat (with manager name header)
+    if group_chat_id:
+        try:
+            group_text = f"👤 <b>{mop['name']}</b>\n\n{text}"
+            await bot.send_message(
+                chat_id=group_chat_id,
+                text=group_text,
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+        except Exception as e:
+            log.error("Failed to send group reminder: %s", e)
+
+    if sent:
+        mark_reminder_sent(task_id)
 
 
 async def check_upcoming_tasks(ctx) -> None:
@@ -111,6 +131,10 @@ async def check_upcoming_tasks(ctx) -> None:
     window_start = now + timedelta(minutes=WINDOW_START_MIN)
     window_end = now + timedelta(minutes=WINDOW_END_MIN)
 
+    # Group chat for duplicating all reminders
+    group_raw = db_get("mop_group_chat_id")
+    group_chat_id = int(group_raw) if group_raw else None
+
     bx = Bitrix()
     bot = ctx.bot
 
@@ -118,6 +142,6 @@ async def check_upcoming_tasks(ctx) -> None:
         try:
             tasks = await bx.fetch_mop_upcoming_tasks(mop["bitrix_id"], window_start, window_end)
             for task in tasks:
-                await process_task(bx, mop, task, bot)
+                await process_task(bx, mop, task, bot, group_chat_id)
         except Exception as e:
             log.error("Error checking tasks for %s: %s", mop["name"], e)

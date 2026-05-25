@@ -366,11 +366,16 @@ class Bitrix:
                 result.append(task)
         return result
 
-    async def _fetch_last_activity(self, deal_id: int, type_id: int) -> "dict | None":
+    async def _fetch_last_activity(
+        self, deal_id: int, type_id: int, responsible_id: int = None
+    ) -> "dict | None":
         """Return the single most-recent activity of a given type for a deal."""
+        flt = {"OWNER_TYPE_ID": 2, "OWNER_ID": deal_id, "TYPE_ID": type_id}
+        if responsible_id:
+            flt["RESPONSIBLE_ID"] = responsible_id
         data = await asyncio.wait_for(
             self.call("crm.activity.list", {
-                "filter": {"OWNER_TYPE_ID": 2, "OWNER_ID": deal_id, "TYPE_ID": type_id},
+                "filter": flt,
                 "select": ["ID", "TYPE_ID", "START_TIME", "DESCRIPTION", "SUBJECT"],
                 "order": {"START_TIME": "DESC"},
                 "start": 0,
@@ -383,9 +388,9 @@ class Bitrix:
         # API returns results ordered DESC; first item is the most recent.
         return result[0] if isinstance(result, list) else None
 
-    async def fetch_last_call(self, deal_id: int) -> "dict | None":
-        """Last phone call activity for a deal (TYPE_ID=2)."""
-        return await self._fetch_last_activity(deal_id, type_id=2)
+    async def fetch_last_call(self, deal_id: int, responsible_id: int = None) -> "dict | None":
+        """Last phone call activity for a deal (TYPE_ID=2), optionally by responsible МОП."""
+        return await self._fetch_last_activity(deal_id, type_id=2, responsible_id=responsible_id)
 
     async def fetch_last_visit(self, deal_id: int) -> "dict | None":
         """Last meeting/visit activity for a deal (TYPE_ID=1)."""
