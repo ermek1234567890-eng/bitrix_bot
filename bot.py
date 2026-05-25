@@ -346,8 +346,9 @@ async def rpt_project(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if val == "done":
         return await _generate_report(q, ctx)
     elif val == "ALL":
+        # "Все проекты" — сразу запускаем отчёт без фильтра по проекту
         ctx.user_data["sel_projects"] = []
-        return await _render_project_selector(q, ctx)
+        return await _generate_report(q, ctx)
     else:
         if val in sel:
             sel.remove(val)
