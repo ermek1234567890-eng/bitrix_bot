@@ -25,18 +25,9 @@ from db import (
     get_projects, upsert_project, get_project_enum_id,
     set_plan, get_plan,
     find_managers_by_names,
-    upsert_mop, get_all_mops, init_mop_tables,
 )
 from bitrix import Bitrix
 from reports import compute_metrics, format_regular_report, format_plan_fact_report, METRICS
-from task_reminder import check_upcoming_tasks
-from db import cleanup_old_reminders as _cleanup_old_reminders
-
-
-async def _daily_cleanup_reminders(ctx) -> None:
-    """Scheduled job — purge reminder dedup records older than 7 days."""
-    _cleanup_old_reminders(days=7)
-    log.info("Old reminders cleaned up")
 from excel_report import generate_regular_excel, generate_planfact_excel
 from telegram import InputFile
 
@@ -65,9 +56,6 @@ ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
     SETUP_USER_PICK,
 ) = range(20, 27)
 
-(
-    MOP_PICK, MOP_TG_ID,
-) = range(30, 32)
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -110,7 +98,6 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "• /setplan — ввести плановые цифры\n"
         "• /managers — управление менеджерами\n"
         "• /setup — настройка полей Bitrix24\n"
-        "• /mop — привязка менеджеров к Telegram\n"
         "• /help — справка",
         parse_mode=ParseMode.HTML,
     )
@@ -994,83 +981,10 @@ async def setup_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Настройка отменена.")
     return ConversationHandler.END
 
-# ─── /mop conversation ────────────────────────────────────────────────────────
-
-async def cmd_mop(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Нет доступа.")
-        return ConversationHandler.END
-
-    managers = get_managers()
-    if not managers:
-        await update.message.reply_text("⚠️ Сначала загрузите менеджеров через /managers")
-        return ConversationHandler.END
-
-    linked = {m["bitrix_id"]: m for m in get_all_mops()}
-    rows = []
-    for m in managers:
-        bid = m["bitrix_id"]
-        tg = linked[bid]["telegram_id"] if bid in linked else None
-        icon = "✅" if tg else "☐"
-        label = f"{icon} {m['short_name']}" + (f" (tg:{tg})" if tg else "")
-        rows.append([(label, f"mop:{bid}:{m['short_name']}")])
-    rows.append([("❌ Отмена", "mop:cancel")])
-
-    await update.message.reply_text(
-        "👥 <b>Привязка МОПов к Telegram</b>\nВыберите менеджера:",
-        parse_mode=ParseMode.HTML,
-        reply_markup=kb(rows),
-    )
-    return MOP_PICK
-
-
-async def mop_pick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    if q.data == "mop:cancel":
-        await safe_edit(q, "Отменено.")
-        return ConversationHandler.END
-
-    _, bitrix_id, name = q.data.split(":", 2)
-    ctx.user_data["mop_bitrix_id"] = int(bitrix_id)
-    ctx.user_data["mop_name"] = name
-    await safe_edit(
-        q,
-        f"👤 <b>{name}</b>\n\n"
-        f"Введите Telegram ID этого менеджера.\n"
-        f"<i>МОП может узнать свой ID у @userinfobot</i>",
-        parse_mode=ParseMode.HTML,
-    )
-    return MOP_TG_ID
-
-
-async def mop_tg_id(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    txt = update.message.text.strip()
-    try:
-        tg_id = int(txt)
-    except ValueError:
-        await update.message.reply_text("❌ Введите числовой Telegram ID.")
-        return MOP_TG_ID
-
-    bitrix_id = ctx.user_data["mop_bitrix_id"]
-    name = ctx.user_data["mop_name"]
-    upsert_mop(bitrix_id, tg_id, name)
-    await update.message.reply_text(
-        f"✅ <b>{name}</b> привязан к Telegram ID <code>{tg_id}</code>",
-        parse_mode=ParseMode.HTML,
-    )
-    return ConversationHandler.END
-
-
-async def mop_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Отменено.")
-    return ConversationHandler.END
-
 # ─── Application builder ──────────────────────────────────────────────────────
 
 def main():
     init_db()
-    init_mop_tables()
     from init_data import seed
     seed()
     app = Application.builder().token(TOKEN).build()
@@ -1117,16 +1031,6 @@ def main():
         allow_reentry=True,
     )
 
-    mop_conv = ConversationHandler(
-        entry_points=[CommandHandler("mop", cmd_mop)],
-        states={
-            MOP_PICK: [CallbackQueryHandler(mop_pick, pattern="^mop:")],
-            MOP_TG_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, mop_tg_id)],
-        },
-        fallbacks=[CommandHandler("cancel", mop_cancel)],
-        allow_reentry=True,
-    )
-
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("managers", cmd_managers))
@@ -1135,7 +1039,6 @@ def main():
     app.add_handler(rpt_conv)
     app.add_handler(plan_conv)
     app.add_handler(setup_conv)
-    app.add_handler(mop_conv)
 
     # Daily task report at 10:30 Almaty (UTC+5) = 05:30 UTC
     almaty = pytz.timezone("Asia/Almaty")
@@ -1145,18 +1048,7 @@ def main():
         name="daily_task_report",
     )
     log.info("Bot started, daily task report scheduled at 10:30 Almaty")
-    app.job_queue.run_repeating(
-        check_upcoming_tasks,
-        interval=300,
-        first=60,
-        name="check_upcoming_tasks",
-    )
-    log.info("Task reminder job scheduled every 5 minutes")
-    app.job_queue.run_daily(
-        _daily_cleanup_reminders,
-        time=dtime(3, 0, tzinfo=almaty),
-        name="cleanup_old_reminders",
-    )
+
     app.run_polling(drop_pending_updates=True)
 
 

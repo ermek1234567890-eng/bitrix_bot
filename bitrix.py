@@ -343,13 +343,13 @@ class Bitrix:
     async def fetch_mop_upcoming_tasks(
         self, user_id: int, window_start: "datetime", window_end: "datetime"
     ) -> list:
-        """Tasks created by МОП, linked to a deal, with deadline in window."""
+        """Tasks assigned to МОП, linked to a deal, with deadline in window."""
         ws = window_start.strftime("%Y-%m-%dT%H:%M:%S")
         we = window_end.strftime("%Y-%m-%dT%H:%M:%S")
 
         tasks = await self.list_all_tasks({
             "filter": {
-                "CREATED_BY": user_id,
+                "RESPONSIBLE_ID": user_id,
                 "!REAL_STATUS": 5,
                 ">=DEADLINE": ws,
                 "<=DEADLINE": we,

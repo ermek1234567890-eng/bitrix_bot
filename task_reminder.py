@@ -3,13 +3,21 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from bitrix import Bitrix
-from db import get_all_mops, is_reminder_sent, mark_reminder_sent, db_get
+from db import get_all_mops, get_managers, is_reminder_sent, mark_reminder_sent, db_get
 from ai_advisor import get_recommendation
 
 log = logging.getLogger(__name__)
 
 WINDOW_START_MIN = 8
 WINDOW_END_MIN = 13
+
+# Менеджеры, чьи задачи всегда дублируются в группу
+GROUP_MANAGER_IDS = {
+    68894,  # Салима
+    68542,  # Ернур
+    67442,  # Самал
+    49464,  # Заир
+}
 
 
 def extract_deal_id(task: dict):
@@ -60,7 +68,10 @@ def format_reminder_message(
     )
 
 
-async def process_task(bx: Bitrix, mop: dict, task: dict, bot, group_chat_id: int = None) -> None:
+async def process_task(
+    bx: Bitrix, mgr: dict, task: dict, bot,
+    group_chat_id: int = None, personal_tg_id: int = None,
+) -> None:
     task_id = int(task.get("id") or task.get("ID") or 0)
     if not task_id:
         return
@@ -71,11 +82,12 @@ async def process_task(bx: Bitrix, mop: dict, task: dict, bot, group_chat_id: in
     if not deal_id:
         return
 
-    mop_bitrix_id = mop.get("bitrix_id")
+    bitrix_id = mgr.get("bitrix_id")
+    mgr_name = mgr.get("short_name") or mgr.get("name", "")
     try:
         deal, call, visit = await asyncio.gather(
             bx.fetch_deal_detail(deal_id),
-            bx.fetch_last_call(deal_id, responsible_id=mop_bitrix_id),
+            bx.fetch_last_call(deal_id, responsible_id=bitrix_id),
             bx.fetch_last_visit(deal_id),
         )
     except Exception as e:
@@ -91,29 +103,33 @@ async def process_task(bx: Bitrix, mop: dict, task: dict, bot, group_chat_id: in
     text = format_reminder_message(deal, call, task, recommendation, portal_url, deal_id)
 
     sent = False
-    # 1. Send to МОП personally
-    try:
-        await bot.send_message(
-            chat_id=mop["telegram_id"],
-            text=text,
-            parse_mode="HTML",
-            disable_web_page_preview=True,
-        )
-        sent = True
-        log.info("Reminder sent to %s for task %s", mop["name"], task_id)
-    except Exception as e:
-        log.error("Failed to send reminder to %s: %s", mop["name"], e)
 
-    # 2. Duplicate to group chat (with manager name header)
+    # 1. Send to МОП personally (if linked to Telegram)
+    if personal_tg_id:
+        try:
+            await bot.send_message(
+                chat_id=personal_tg_id,
+                text=text,
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+            sent = True
+            log.info("Personal reminder sent to %s for task %s", mgr_name, task_id)
+        except Exception as e:
+            log.error("Failed to send personal reminder to %s: %s", mgr_name, e)
+
+    # 2. Always send to group chat
     if group_chat_id:
         try:
-            group_text = f"👤 <b>{mop['name']}</b>\n\n{text}"
+            group_text = f"👤 <b>{mgr_name}</b>\n\n{text}"
             await bot.send_message(
                 chat_id=group_chat_id,
                 text=group_text,
                 parse_mode="HTML",
                 disable_web_page_preview=True,
             )
+            sent = True
+            log.info("Group reminder sent for %s, task %s", mgr_name, task_id)
         except Exception as e:
             log.error("Failed to send group reminder: %s", e)
 
@@ -122,26 +138,51 @@ async def process_task(bx: Bitrix, mop: dict, task: dict, bot, group_chat_id: in
 
 
 async def check_upcoming_tasks(ctx) -> None:
-    """Job queue callback — runs every 5 minutes."""
-    mops = get_all_mops()
-    if not mops:
+    """Job queue callback — runs every 5 minutes.
+    Checks GROUP_MANAGER_IDS for group chat. Sends personally to linked MOPs.
+    """
+    managers = get_managers()
+    if not managers:
+        log.warning("No managers in DB — skipping reminder check")
         return
 
     now = datetime.now(timezone.utc)
     window_start = now + timedelta(minutes=WINDOW_START_MIN)
     window_end = now + timedelta(minutes=WINDOW_END_MIN)
 
-    # Group chat for duplicating all reminders
+    # Group chat for reminders
     group_raw = db_get("mop_group_chat_id")
     group_chat_id = int(group_raw) if group_raw else None
+
+    # Build lookup: bitrix_id → telegram_id (for personal sending)
+    mop_tg = {m["bitrix_id"]: m["telegram_id"] for m in get_all_mops()}
+
+    # Managers to check = GROUP_MANAGER_IDS + any linked MOPs
+    check_ids = set(GROUP_MANAGER_IDS)
+    check_ids.update(mop_tg.keys())
+
+    # Filter to only relevant managers
+    to_check = [m for m in managers if m["bitrix_id"] in check_ids]
+
+    log.info(
+        "Checking tasks: %d managers, window %s – %s UTC",
+        len(to_check),
+        window_start.strftime("%H:%M"),
+        window_end.strftime("%H:%M"),
+    )
 
     bx = Bitrix()
     bot = ctx.bot
 
-    for mop in mops:
+    for mgr in to_check:
+        bid = mgr["bitrix_id"]
+        personal_tg_id = mop_tg.get(bid)  # None if not linked
+        send_to_group = group_chat_id if bid in GROUP_MANAGER_IDS else None
         try:
-            tasks = await bx.fetch_mop_upcoming_tasks(mop["bitrix_id"], window_start, window_end)
+            tasks = await bx.fetch_mop_upcoming_tasks(bid, window_start, window_end)
+            if tasks:
+                log.info("Found %d tasks for %s", len(tasks), mgr.get("short_name", mgr["name"]))
             for task in tasks:
-                await process_task(bx, mop, task, bot, group_chat_id)
+                await process_task(bx, mgr, task, bot, send_to_group, personal_tg_id)
         except Exception as e:
-            log.error("Error checking tasks for %s: %s", mop["name"], e)
+            log.error("Error checking tasks for %s: %s", mgr.get("short_name", mgr["name"]), e)

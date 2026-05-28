@@ -12,7 +12,7 @@ def _get_model():
     global _model
     if _model is None:
         genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
-        _model = genai.GenerativeModel("gemini-2.0-flash")
+        _model = genai.GenerativeModel("gemini-2.5-flash")
     return _model
 
 
@@ -68,6 +68,6 @@ def get_recommendation(deal: dict, call, visit) -> str:
         response = model.generate_content(prompt)
         return response.text.strip()
 
-    except Exception:
+    except Exception as e:
         log.exception("AI advisor error for deal %s", deal.get("TITLE", "unknown"))
-        return "Рекомендация недоступна. Изучите историю клиента перед звонком."
+        return f"⚠️ Ошибка AI: {type(e).__name__}: {str(e)[:200]}"

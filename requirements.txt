@@ -4,5 +4,3 @@ python-dotenv
 openpyxl
 pytz
 google-generativeai
-pytest
-pytest-asyncio

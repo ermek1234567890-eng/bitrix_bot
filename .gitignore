@@ -1,0 +1,13 @@
+.env
+bot.db
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+debug_*.py
+_*.txt
+*.json
+*.log
+*.bat
+bot_*.txt
+
