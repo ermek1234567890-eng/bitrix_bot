@@ -1,6 +1,6 @@
-python-telegram-bot[job-queue]
-httpx
-python-dotenv
-openpyxl
-pytz
-google-generativeai
+python-telegram-bot[job-queue]==21.0.1
+httpx==0.24.1
+python-dotenv==1.0.0
+openpyxl==3.10.2
+pytz==2024.1
+google-generativeai==0.3.0
