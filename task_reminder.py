@@ -33,17 +33,18 @@ def format_reminder_message(
     recommendation: str,
     portal_url: str,
     deal_id: int,
+    stage_name: str = "",
 ) -> str:
     deal_title = deal.get("TITLE", "Неизвестная сделка")
-    stage = deal.get("STAGE_ID", "")
+    display_stage = stage_name or deal.get("STAGE_ID", "Неизвестно")
 
     try:
         modify = deal.get("DATE_MODIFY", "")
         dt = datetime.fromisoformat(modify.replace("Z", "+00:00"))
         days_in_stage = (datetime.now(dt.tzinfo) - dt).days
-        stage_str = f"{stage} ({days_in_stage} дн. в этапе)"
+        stage_str = f"{display_stage} ({days_in_stage} дн. в этапе)"
     except Exception:
-        stage_str = stage
+        stage_str = display_stage
 
     if call:
         call_text = (call.get("DESCRIPTION") or call.get("SUBJECT") or "")[:400]
@@ -94,13 +95,22 @@ async def process_task(
         log.error("Error fetching data for task %s: %s", task_id, e)
         return
 
+    # Resolve stage name from Bitrix24
+    try:
+        stage_name = await bx.fetch_stage_name(
+            deal.get("STAGE_ID", ""),
+            deal.get("CATEGORY_ID", 0),
+        )
+    except Exception:
+        stage_name = deal.get("STAGE_ID", "")
+
     try:
         recommendation = get_recommendation(deal, call, visit)
     except Exception as e:
         log.error("get_recommendation failed for task %s: %s", task_id, e)
         recommendation = "Рекомендация недоступна. Изучите историю клиента перед звонком."
     portal_url = bx.get_portal_url()
-    text = format_reminder_message(deal, call, task, recommendation, portal_url, deal_id)
+    text = format_reminder_message(deal, call, task, recommendation, portal_url, deal_id, stage_name)
 
     sent = False
 

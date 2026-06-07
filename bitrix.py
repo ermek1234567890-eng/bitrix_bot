@@ -72,7 +72,7 @@ class Bitrix:
         return [default] + [c for c in cats if str(c.get("ID")) != "0"]
 
     async def get_pipeline_stages(self, pipeline_id) -> list:
-        r = await self.call("crm.dealcategory.stages.list", {"id": pipeline_id})
+        r = await self.call("crm.dealcategory.stage.list", {"id": pipeline_id})
         return r.get("result", [])
 
     async def get_users(self, position: str = None, positions: list = None) -> list:
@@ -399,6 +399,19 @@ class Bitrix:
     async def fetch_last_visit(self, deal_id: int) -> "dict | None":
         """Last meeting/visit activity for a deal (TYPE_ID=1)."""
         return await self._fetch_last_activity(deal_id, type_id=1)
+
+    async def fetch_stage_name(self, stage_id: str, category_id=0) -> str:
+        """Resolve STAGE_ID (e.g. 'C4:WON') to human-readable name (e.g. 'Дожим')."""
+        if not stage_id:
+            return "Неизвестно"
+        try:
+            stages = await self.get_pipeline_stages(category_id or 0)
+            for s in stages:
+                if s.get("STATUS_ID") == stage_id:
+                    return s.get("NAME", stage_id)
+        except Exception as e:
+            log.warning("Failed to fetch stage name for %s: %s", stage_id, e)
+        return stage_id
 
     async def fetch_deal_detail(self, deal_id: int) -> dict:
         """Fetch deal details: title, stage, dates."""
